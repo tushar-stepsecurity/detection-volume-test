@@ -81,7 +81,11 @@ def main():
             "    runs-on: ubuntu-latest",
             "    steps:",
             "      - name: Harden Runner",
-            "        uses: step-security/harden-runner@v2",
+            # rc-20-int is the int-targeted branch of the action: its
+            # src/configs.ts sets STEPSECURITY_ENV="int", so telemetry goes to
+            # int.api.stepsecurity.io rather than production. @v2 would send
+            # these detections to prod.
+            "        uses: step-security/harden-runner@rc-20-int",
             "        with:",
             "          egress-policy: audit",
             "",

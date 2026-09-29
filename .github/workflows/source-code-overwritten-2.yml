@@ -1,0 +1,25 @@
+# Produces a single Source-Code-Overwritten detection on a file no other
+# workflow in this repo touches: Harden Runner (int) records lib/config.js
+# being modified after checkout.
+name: source-code-overwritten-2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  overwrite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Overwrite a checked-in source file
+        run: printf 'module.exports.overwritten = true;\n' >> lib/config.js

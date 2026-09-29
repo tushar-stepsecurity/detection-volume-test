@@ -1,0 +1,24 @@
+# Produces a single Source-Code-Overwritten detection: Harden Runner (int)
+# records a checked-in file being modified after checkout.
+name: source-code-overwritten
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  overwrite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Overwrite a checked-in source file
+        run: printf '// overwritten\n' >> src/module-00000.js

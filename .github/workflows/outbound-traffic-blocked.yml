@@ -1,0 +1,30 @@
+# Produces a Domain-Blocked detection ("Notify when outbound traffic is
+# blocked"): Harden Runner (int) in block mode stops a call to a domain that is
+# not on the allow list. Unlike Source-Code-Overwritten, this detection is sent
+# to email, Slack and Teams, so it exercises notification delivery end to end.
+name: outbound-traffic-blocked
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blocked-call:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Call a domain that is not allowed
+        run: curl --max-time 10 -sS https://example.com || echo "blocked as expected"

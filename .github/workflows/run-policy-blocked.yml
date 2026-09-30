@@ -1,0 +1,32 @@
+# Violates a "require pinned actions" run policy: the step below references an
+# action by tag, not by commit SHA. The policy evaluator reads action refs from
+# the YAML without evaluating `if:`, so the ref counts even though the step never
+# runs.
+#
+# Only a policy in enforce mode (not dry run) produces the "Blocked" verdict
+# that sends a "run policy is blocked" notification; the run is then cancelled.
+name: run-policy-blocked
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unpinned-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: audit
+
+      - name: Unpinned action (never runs)
+        if: false
+        uses: actions/github-script@v7
+        with:
+          script: console.log("unreachable")
+
+      - name: Done
+        run: echo "If this ran, no run policy blocked the workflow."

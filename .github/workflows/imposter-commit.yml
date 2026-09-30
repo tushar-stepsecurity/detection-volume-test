@@ -1,0 +1,22 @@
+# Produces an imposter commit detection: the action below is pinned to a commit
+# in tushar-stepsecurity/icd-test-action whose branch was deleted after push,
+# so the SHA resolves on GitHub but no branch or tag of the action contains it.
+name: imposter-commit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  imposter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: audit
+
+      - name: Action pinned to an imposter commit
+        uses: tushar-stepsecurity/icd-test-action@9d9a7b9279d46893f72e76046b6ee01caf0b445b

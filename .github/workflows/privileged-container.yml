@@ -1,0 +1,23 @@
+# Produces a Privileged-Container detection ("Notify when suspicious process
+# events are detected"): Harden Runner (int) records a container started with
+# --privileged. The job name carries the run id so every run is a new detection.
+name: privileged-container
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  privileged:
+    name: privileged-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: audit
+
+      - name: Start a privileged container
+        run: docker run --rm --privileged alpine:3.20 true

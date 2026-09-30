@@ -26,5 +26,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # A different domain every run, so each run is a new detection: the
+      # backend notifies only once per workflow for the same detection.
       - name: Call a domain that is not allowed
-        run: curl --max-time 10 -sS https://example.com || echo "blocked as expected"
+        run: curl --max-time 10 -sS "https://run-${{ github.run_id }}-${{ github.run_attempt }}.example.com" || echo "blocked as expected"

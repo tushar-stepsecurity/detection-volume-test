@@ -1,0 +1,32 @@
+# Same as outbound-traffic-blocked, under a new workflow file so it has no
+# notification history: Harden Runner (int) in block mode stops a call to a
+# domain unique to this run, which produces a Domain-Blocked detection.
+# Used to trace the notification send path in the int logs.
+name: notification-debug
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blocked-call:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # A different domain every run, so each run is a new detection: the
+      # backend notifies only once per workflow for the same detection.
+      - name: Call a domain that is not allowed
+        run: curl --max-time 10 -sS "https://run-${{ github.run_id }}-${{ github.run_attempt }}.example.com" || echo "blocked as expected"

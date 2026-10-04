@@ -1,0 +1,73 @@
+# One job per notification profile, each producing detections that are
+# delivered by email, Slack and Teams. Job names and the blocked domain carry
+# the run id, so every run is a new detection: the backend notifies only once
+# per workflow for the same detection.
+#
+#   secrets-*   -> Secret-In-Build-Log (and, on the first run of this workflow,
+#                  Secret-In-Artifact): "secrets detected in build log/artifacts"
+#   network-*   -> Suspicious-Network-Call to the cloud metadata IP and
+#                  Privileged-Container: "suspicious network calls / process events"
+#   blocked-*   -> Domain-Blocked: "outbound traffic is blocked"
+name: notification-profiles
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: secrets-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: audit
+
+      # The same dummy key (NOT a real key) the integration canary suite uses.
+      - name: Print a dummy private key to the build log
+        env:
+          ENCODED_PRIVATE_KEY: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tTUlJRXZnSUJBREFOQmdrcWhraUc5dzBCQVFFRkFBU0NCS2d3Z2dTa0FnRUFBb0lCQVFDN1ZKVFV0OVVzOGNLagpNekVmWXlqaVdBNFI0L00yYlMxR0I0dDdOWHA5OEMzU0M2ZFZNdkR1aWN0R2V1clQ4ak5idkpaSHRDU3VZRWNONXI0RQpKV25YaXNLNVkrVHYra1pnWlBtNXdRQTB3MVd1cGZhUlZQUGhoR2dUN1daeEM3UFJMTjIvaUo5dDJRTGloNzlEMFF1ZwpINFE3clB3SVVDdzdOYjJYSVpHc1VYSzJhZmlJM24vT1NQSHVRR0dCRnhIcWI3VWwzM3lJdUN4UjBJcTVuem1RTENFVApSYm5pRzRoeE5aMEo3a3hwZzdtWk5LQ1JKd0NRSFl0SEhxVVVOTGl4Q01TNDU1cWo5SUhJTVYwbEc0NFhLWEV6U0oxWgpjajZuQ1B6aFJtUXBDd2p0MWJJT0NWU0VKMUppU204YTVTdUpLRkxtQWlVTmtsZnJOckdEMjN1RUlRSURBUUFCQW9JQgpBQUh0QmJZcDBBdzVOTi9lV0ROUDVuekZFYVhSWmM3QUNuc3BQN1VFSUZZeDkrNW5BU1pnc0l1ZUh4VlpiZ25QTTl6RQotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0t
+        run: echo "$ENCODED_PRIVATE_KEY" | base64 -d
+
+      - name: Write a fake token to a file
+        run: echo "ghp_$(head -c 400 /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 36)" > leaked-token.txt
+
+      - name: Upload the fake token as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: leaked-token-${{ github.run_id }}
+          path: leaked-token.txt
+          retention-days: 1
+
+  network-and-process:
+    name: network-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: audit
+
+      - name: Call the cloud metadata endpoint
+        run: curl --max-time 5 -s -H "Metadata:true" "http://169.254.169.254/metadata/instance?api-version=2021-02-01" > /dev/null || true
+
+      - name: Start a privileged container
+        run: docker run --rm --privileged alpine:3.20 true
+
+  blocked:
+    name: blocked-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@rc-20-int
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+
+      - name: Call a domain that is not allowed
+        run: curl --max-time 10 -sS "https://run-${{ github.run_id }}-${{ github.run_attempt }}.example.com" || echo "blocked as expected"

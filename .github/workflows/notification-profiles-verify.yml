@@ -1,0 +1,77 @@
+# Fixture for the notification profiles integration test
+# (integration-test/notification_profiles, case
+# "detections-route-to-their-profiles").
+#
+# Each job produces one detection that is delivered by Slack, email and Teams.
+# The test gives each detection its own notification profile, pointed at its
+# own webhook inbox, and asserts every inbox receives only its own detection.
+#
+#   blocked-*     -> Domain-Blocked        ("outbound traffic is blocked")
+#   secrets-*     -> Secret-In-Build-Log   ("secrets detected in the build log")
+#   privileged-*  -> Privileged-Container  ("suspicious process events")
+#
+# Detections notify once per (workflow, detection) and the detection key is
+# built from the job name or the blocked domain. Both carry the run id here, so
+# every run is a fresh detection and the test never has to clear old rows.
+#
+# WHY THIS REPO: a detection is attributed to the org that owns the repository,
+# and the test rewrites the notification profiles of the "step-integration-tests"
+# org, so the fixture has to live in that org.
+#
+# Targets int, where notification profiles exist, with the same agent as
+# poc_workflow_int.yml (prateek-stepsecurity/harden-runner@int).
+# step-security/harden-runner@int is a June 2024 branch whose agent ignores
+# egress-policy: block and does not deliver the runtime events these
+# detections come from. Dispatch only, so it never runs on push and never
+# competes with the other suites that use this repo.
+name: notification-profiles-verify
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blocked:
+    name: blocked-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: prateek-stepsecurity/harden-runner@int
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+
+      - name: Call a domain that is not allowed
+        run: curl --max-time 10 -sS "https://run-${{ github.run_id }}-${{ github.run_attempt }}.example.com" || echo "blocked as expected"
+
+  secrets:
+    name: secrets-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: prateek-stepsecurity/harden-runner@int
+        with:
+          egress-policy: audit
+
+      # The same dummy key (NOT a real key) as the handle-private-key job in
+      # poc_workflow_int.yml, which the canary suite already relies on.
+      - name: Print a dummy private key to the build log
+        env:
+          ENCODED_PRIVATE_KEY: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tTUlJRXZnSUJBREFOQmdrcWhraUc5dzBCQVFFRkFBU0NCS2d3Z2dTa0FnRUFBb0lCQVFDN1ZKVFV0OVVzOGNLagpNekVmWXlqaVdBNFI0L00yYlMxR0I0dDdOWHA5OEMzU0M2ZFZNdkR1aWN0R2V1clQ4ak5idkpaSHRDU3VZRWNONXI0RQpKV25YaXNLNVkrVHYra1pnWlBtNXdRQTB3MVd1cGZhUlZQUGhoR2dUN1daeEM3UFJMTjIvaUo5dDJRTGloNzlEMFF1ZwpINFE3clB3SVVDdzdOYjJYSVpHc1VYSzJhZmlJM24vT1NQSHVRR0dCRnhIcWI3VWwzM3lJdUN4UjBJcTVuem1RTENFVApSYm5pRzRoeE5aMEo3a3hwZzdtWk5LQ1JKd0NRSFl0SEhxVVVOTGl4Q01TNDU1cWo5SUhJTVYwbEc0NFhLWEV6U0oxWgpjajZuQ1B6aFJtUXBDd2p0MWJJT0NWU0VKMUppU204YTVTdUpLRkxtQWlVTmtsZnJOckdEMjN1RUlRSURBUUFCQW9JQgpBQUh0QmJZcDBBdzVOTi9lV0ROUDVuekZFYVhSWmM3QUNuc3BQN1VFSUZZeDkrNW5BU1pnc0l1ZUh4VlpiZ25QTTl6RQotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0t
+        run: echo "$ENCODED_PRIVATE_KEY" | base64 -d
+
+  privileged:
+    name: privileged-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: prateek-stepsecurity/harden-runner@int
+        with:
+          egress-policy: audit
+
+      - name: Start a privileged container
+        run: docker run --rm --privileged alpine:3.20 true
